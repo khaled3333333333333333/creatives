@@ -163,8 +163,8 @@
   <div id="addOfferForm">
     <label>Offer Name:</label><input id="offerNameInput" type="text">
     <label>Sponsor:</label><input id="sponsorInput" type="text">
-    <label>From (comma separated if multiple):</label><input id="fromInput" type="text">
-    <label>Subject (comma separated if multiple):</label><input id="subjectInput" type="text">
+    <label>From (one per line):</label><textarea id="fromInput" rows="4"></textarea>
+	<label>Subject (one per line):</label><textarea id="subjectInput" rows="4"></textarea>
     <label>GEO:</label><input id="geoInput" type="text">
     <label>Creative HTML:</label><textarea id="creativeInput" rows="6"></textarea>
     <button id="addOfferBtn">Add Offer</button>
@@ -217,8 +217,8 @@
           div.className = 'offer';
           const table = document.createElement('table');
           // Normalize from and subject arrays
-          const fromArray = Array.isArray(offer.from) ? offer.from : (offer.from ? offer.from.split(',').map(s => s.trim()) : []);
-          const subjectArray = Array.isArray(offer.subject) ? offer.subject : (offer.subject ? offer.subject.split(',').map(s => s.trim()) : []);
+          const fromArray = Array.isArray(offer.from) ? offer.from : (offer.from ? offer.from.split('\n').map(s => s.trim()).filter(Boolean) : []);
+		  const subjectArray = Array.isArray(offer.subject) ? offer.subject : (offer.subject ? offer.subject.split('\n').map(s => s.trim()).filter(Boolean) : []);
 
           function createSpans(arr) {
             return arr.map(item => `<span class='copyText'>${item}</span>`).join('<br>');
