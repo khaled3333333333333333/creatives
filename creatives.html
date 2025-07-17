@@ -478,7 +478,7 @@
 
     // On page load: Fetch offers JSON from GitHub Pages then fallback to localStorage
     async function loadOffers() {
-      const githubJsonUrl = 'https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPOSITORY/offers.json'; // <-- Replace this URL with your actual GitHub Pages JSON URL
+      const githubJsonUrl = 'https://raw.githubusercontent.com/khaled3333333333333333/creatives/refs/heads/main/offers.json'; // <-- Replace this URL with your actual GitHub Pages JSON URL
       try {
         const response = await fetch(githubJsonUrl);
         if (!response.ok) throw new Error('Network response not ok');
