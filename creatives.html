@@ -83,8 +83,14 @@
       cursor: pointer;
       color: #007acc;
       text-decoration: underline;
-      display: block;
-      margin-bottom: 3px;
+      display: inline-block;
+      margin-bottom: 4px;
+      padding: 2px 6px;
+      border-radius: 6px;
+      user-select: all;
+    }
+    .copyText:hover {
+      background-color: #d0e7ff;
     }
     #creativeModal, #linkModal {
       display: none;
@@ -157,13 +163,9 @@
   <div id="addOfferForm">
     <label>Offer Name:</label><input id="offerNameInput" type="text">
     <label>Sponsor:</label><input id="sponsorInput" type="text">
-    <label>From:</label>
-    <div id="fromInputsContainer"></div>
-    <button id="addFromBtn" type="button">+ Add From</button>
-    <label>Subject:</label>
-    <div id="subjectInputsContainer"></div>
-    <button id="addSubjectBtn" type="button">+ Add Subject</button>
-    <label>Geo:</label><input id="geoInput" type="text" placeholder="Enter geo info">
+    <label>From (comma separated if multiple):</label><input id="fromInput" type="text">
+    <label>Subject (comma separated if multiple):</label><input id="subjectInput" type="text">
+    <label>GEO:</label><input id="geoInput" type="text">
     <label>Creative HTML:</label><textarea id="creativeInput" rows="6"></textarea>
     <button id="addOfferBtn">Add Offer</button>
   </div>
@@ -182,16 +184,28 @@
     const copyLinksBtn = document.getElementById('copyLinksBtn');
     const cancelLinksBtn = document.getElementById('cancelLinksBtn');
 
-    const fromInputsContainer = document.getElementById('fromInputsContainer');
-    const subjectInputsContainer = document.getElementById('subjectInputsContainer');
-    const addFromBtn = document.getElementById('addFromBtn');
-    const addSubjectBtn = document.getElementById('addSubjectBtn');
-
-    let offers = [];
+    let offers = JSON.parse(localStorage.getItem('offers') || '[]');
     let detectedLinks = [], currentCreativeHTML = '', currentOfferIndex = null;
 
     function saveOffers() {
       localStorage.setItem('offers', JSON.stringify(offers));
+    }
+
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).catch(() => {
+        const temp = document.createElement('textarea');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+      });
+    }
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.className = 'show';
+      setTimeout(() => toast.className = toast.className.replace('show', ''), 3000);
     }
 
     function renderOffers(filter = '') {
@@ -202,265 +216,111 @@
           const div = document.createElement('div');
           div.className = 'offer';
           const table = document.createElement('table');
+          // Normalize from and subject arrays
+          const fromArray = Array.isArray(offer.from) ? offer.from : (offer.from ? offer.from.split(',').map(s => s.trim()) : []);
+          const subjectArray = Array.isArray(offer.subject) ? offer.subject : (offer.subject ? offer.subject.split(',').map(s => s.trim()) : []);
 
-          // Offer Name, Sponsor, Geo
-          [['Offer Name:', offer.name], ['Sponsor:', offer.sponsor || ''], ['Geo:', offer.geo || '']].forEach(([k, v]) => {
+          function createSpans(arr) {
+            return arr.map(item => `<span class='copyText'>${item}</span>`).join('<br>');
+          }
+
+          [['Offer Name:', offer.name],
+           ['Sponsor:', offer.sponsor || ''],
+           ['From:', createSpans(fromArray)],
+           ['Subject:', createSpans(subjectArray)],
+           ['GEO:', `<span class='copyText'>${offer.geo || ''}</span>`]
+          ].forEach(([k, v]) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><strong>${k}</strong></td><td>${v}</td>`;
             table.appendChild(tr);
           });
-
-          // From(s) as individual copyable items
-          const trFrom = document.createElement('tr');
-          const tdFromLabel = document.createElement('td');
-          tdFromLabel.innerHTML = `<strong>From:</strong>`;
-          const tdFromValues = document.createElement('td');
-          if (Array.isArray(offer.from)) {
-            offer.from.forEach(fText => {
-              const span = document.createElement('span');
-              span.className = 'copyText';
-              span.textContent = fText;
-              tdFromValues.appendChild(span);
-            });
-          } else {
-            const span = document.createElement('span');
-            span.className = 'copyText';
-            span.textContent = offer.from || '';
-            tdFromValues.appendChild(span);
-          }
-          trFrom.appendChild(tdFromLabel);
-          trFrom.appendChild(tdFromValues);
-          table.appendChild(trFrom);
-
-          // Subject(s) as individual copyable items
-          const trSubject = document.createElement('tr');
-          const tdSubjectLabel = document.createElement('td');
-          tdSubjectLabel.innerHTML = `<strong>Subject:</strong>`;
-          const tdSubjectValues = document.createElement('td');
-          if (Array.isArray(offer.subject)) {
-            offer.subject.forEach(sText => {
-              const span = document.createElement('span');
-              span.className = 'copyText';
-              span.textContent = sText;
-              tdSubjectValues.appendChild(span);
-            });
-          } else {
-            const span = document.createElement('span');
-            span.className = 'copyText';
-            span.textContent = offer.subject || '';
-            tdSubjectValues.appendChild(span);
-          }
-          trSubject.appendChild(tdSubjectLabel);
-          trSubject.appendChild(tdSubjectValues);
-          table.appendChild(trSubject);
-
-          // Creative and buttons
-          const trCreative = document.createElement('tr');
-          const tdCreativeLabel = document.createElement('td');
-          tdCreativeLabel.innerHTML = `<strong>Creative:</strong>`;
-          const tdCreativeValue = document.createElement('td');
-          const showBtn = document.createElement('button');
-          showBtn.textContent = 'Show Creative';
-          showBtn.onclick = () => showCreative(index);
-          const copyBtn = document.createElement('button');
-          copyBtn.textContent = 'Copy Creative';
-          copyBtn.onclick = () => copyCreative(index);
-          tdCreativeValue.appendChild(showBtn);
-          tdCreativeValue.appendChild(copyBtn);
-          trCreative.appendChild(tdCreativeLabel);
-          trCreative.appendChild(tdCreativeValue);
-          table.appendChild(trCreative);
-
-          // Delete offer button
-          const trDelete = document.createElement('tr');
-          const tdDelete = document.createElement('td');
-          tdDelete.colSpan = 2;
-          const delBtn = document.createElement('button');
-          delBtn.textContent = 'Delete Offer';
-          delBtn.className = 'btn-danger';
-          delBtn.onclick = () => {
-            if (confirm(`Delete offer "${offer.name}"?`)) {
-              offers.splice(index, 1);
-              saveOffers();
-              renderOffers(document.getElementById('searchBar').value);
-            }
-          };
-          tdDelete.appendChild(delBtn);
-          trDelete.appendChild(tdDelete);
-          table.appendChild(trDelete);
-
           div.appendChild(table);
+
+          // Add button controls
+          [
+            {text:'Copy From', action: () => { copyToClipboard(fromArray.join('\n')); showToast('Copied From all!'); }},
+            {text:'Copy Subject', action: () => { copyToClipboard(subjectArray.join('\n')); showToast('Copied Subject all!'); }},
+            {text:'Copy GEO', action: () => { copyToClipboard(offer.geo || ''); showToast('Copied GEO!'); }},
+            {text:'Show Creative', action: () => {
+              document.getElementById('creativeModalContent').innerHTML = offer.creative;
+              document.getElementById('creativeModal').style.display = 'block';
+              overlay.style.display = 'block';
+            }},
+            {text:'Copy Creative', action: () => { copyToClipboard(offer.creative); showToast('Copied Creative!'); }},
+            {text:'Edit Links & Copy', action: () => showLinkModal(index)},
+            {text:'Delete', action: () => {
+              if (confirm('Delete?')) {
+                offers.splice(index, 1);
+                saveOffers();
+                renderOffers();
+              }
+            }, className:'btn-danger'}
+          ].forEach(({text, action, className}) => {
+            const btn = document.createElement('button');
+            btn.textContent = text;
+            if (className) btn.className = className;
+            btn.onclick = action;
+            div.appendChild(btn);
+          });
+
           offersContainer.appendChild(div);
         }
       });
 
-      // Attach copy on click for all .copyText spans
+      // Add click listeners to individual .copyText spans
       document.querySelectorAll('.copyText').forEach(span => {
         span.onclick = () => {
-          navigator.clipboard.writeText(span.textContent).then(() => {
-            showToast('Copied: ' + span.textContent);
-          });
+          copyToClipboard(span.textContent);
+          showToast('Copied: ' + span.textContent);
         };
       });
     }
 
-    function showCreative(index) {
-      currentOfferIndex = index;
-      currentCreativeHTML = offers[index].creative || '';
-      document.getElementById('creativeModalContent').innerHTML = currentCreativeHTML || '<i>No creative HTML</i>';
-      document.getElementById('creativeModal').style.display = 'block';
-      overlay.style.display = 'block';
-      detectLinksInCreative(currentCreativeHTML);
-    }
-
-    function copyCreative(index) {
-      const html = offers[index].creative || '';
-      navigator.clipboard.writeText(html).then(() => showToast('Creative copied'));
-    }
-
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.className = 'show';
-      setTimeout(() => { toast.className = toast.className.replace('show', ''); }, 3000);
-    }
-
-    // Add from and subject input fields dynamically
-    function addFromInput(value = '') {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = 'From text';
-      input.value = value;
-      fromInputsContainer.appendChild(input);
-    }
-    function addSubjectInput(value = '') {
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.placeholder = 'Subject text';
-      input.value = value;
-      subjectInputsContainer.appendChild(input);
-    }
-
-    document.getElementById('toggleAddOffer').onclick = () => {
-      const form = document.getElementById('addOfferForm');
-      if (form.style.display === 'block') {
-        form.style.display = 'none';
-      } else {
-        form.style.display = 'block';
-      }
-    };
-
-    addFromBtn.onclick = () => addFromInput();
-    addSubjectBtn.onclick = () => addSubjectInput();
-
-    document.getElementById('addOfferBtn').onclick = () => {
-      const name = document.getElementById('offerNameInput').value.trim();
-      if (!name) return alert('Offer name required');
-      const sponsor = document.getElementById('sponsorInput').value.trim();
-      const geo = document.getElementById('geoInput').value.trim();
-      const creative = document.getElementById('creativeInput').value.trim();
-      const froms = [...fromInputsContainer.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean);
-      const subjects = [...subjectInputsContainer.querySelectorAll('input')].map(i => i.value.trim()).filter(Boolean);
-      offers.push({
-        name,
-        sponsor,
-        geo,
-        from: froms.length > 1 ? froms : froms[0] || '',
-        subject: subjects.length > 1 ? subjects : subjects[0] || '',
-        creative
+    function showLinkModal(i) {
+      currentOfferIndex = i;
+      const offer = offers[i];
+      currentCreativeHTML = offer.creative;
+      const doc = new DOMParser().parseFromString(offer.creative, 'text/html');
+      const links = doc.querySelectorAll('a[href]');
+      const map = new Map();
+      links.forEach(a => {
+        const href = a.getAttribute('href');
+        if (href && !map.has(href)) map.set(href, { original: href, replacement: '' });
       });
-      saveOffers();
-      renderOffers(document.getElementById('searchBar').value);
-      clearAddOfferForm();
-      document.getElementById('addOfferForm').style.display = 'none';
-      showToast('Offer added');
-    };
-
-    function clearAddOfferForm() {
-      document.getElementById('offerNameInput').value = '';
-      document.getElementById('sponsorInput').value = '';
-      document.getElementById('geoInput').value = '';
-      document.getElementById('creativeInput').value = '';
-      fromInputsContainer.innerHTML = '';
-      subjectInputsContainer.innerHTML = '';
-    }
-
-    document.getElementById('searchBar').addEventListener('input', (e) => {
-      renderOffers(e.target.value);
-    });
-
-    // Export and import JSON
-    function exportOffers() {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(offers, null, 2));
-      const dlAnchorElem = document.createElement('a');
-      dlAnchorElem.setAttribute("href", dataStr);
-      dlAnchorElem.setAttribute("download", "offers.json");
-      dlAnchorElem.click();
-    }
-
-    document.getElementById('importFile').addEventListener('change', (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          offers = JSON.parse(e.target.result);
-          saveOffers();
-          renderOffers('');
-          showToast('Offers imported');
-        } catch {
-          alert('Invalid JSON file');
-        }
-      };
-      reader.readAsText(file);
-      event.target.value = '';
-    });
-
-    // Link detection in creative HTML
-    function detectLinksInCreative(html) {
-      detectedLinks = [];
+      detectedLinks = Array.from(map.values());
+      if (!detectedLinks.length) return alert('No links.');
       linkForm.innerHTML = '';
-      const urlRegex = /https?:\/\/[^\s"'<>]+/g;
-      let match;
-      while ((match = urlRegex.exec(html)) !== null) {
-        if (!detectedLinks.includes(match[0])) {
-          detectedLinks.push(match[0]);
-        }
-      }
-      if (detectedLinks.length === 0) {
-        linkForm.innerHTML = '<p>No links detected.</p>';
-        copyLinksBtn.style.display = 'none';
-        return;
-      }
-      copyLinksBtn.style.display = 'inline-block';
-      detectedLinks.forEach((link, i) => {
+      detectedLinks.forEach((l, i) => {
         const label = document.createElement('label');
-        label.textContent = `Replace link #${i + 1}: ${link}`;
+        label.textContent = `Replace link: ${l.original}`;
         const input = document.createElement('input');
         input.type = 'text';
-        input.value = link;
-        input.dataset.original = link;
+        input.placeholder = 'New URL';
+        input.oninput = e => detectedLinks[i].replacement = e.target.value;
         linkForm.appendChild(label);
         linkForm.appendChild(input);
       });
+      linkModal.style.display = 'block';
+      overlay.style.display = 'block';
     }
 
     copyLinksBtn.onclick = () => {
-      let modifiedHTML = currentCreativeHTML;
-      [...linkForm.querySelectorAll('input')].forEach(input => {
-        const original = input.dataset.original;
-        const replacement = input.value;
-        if (replacement !== original) {
-          // Use global replace with RegExp escaping special chars
-          const escapedOrig = original.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const reg = new RegExp(escapedOrig, 'g');
-          modifiedHTML = modifiedHTML.replace(reg, replacement);
+      if (currentOfferIndex === null) return;
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(currentCreativeHTML, 'text/html');
+      const links = doc.querySelectorAll('a[href]');
+      links.forEach(link => {
+        const originalHref = link.getAttribute('href');
+        const replacement = detectedLinks.find(l => l.original === originalHref)?.replacement;
+        if (replacement) {
+          link.setAttribute('href', replacement);
         }
       });
-      navigator.clipboard.writeText(modifiedHTML).then(() => {
-        showToast('Creative copied with replaced links');
-        linkModal.style.display = 'none';
-        overlay.style.display = 'none';
-      });
+      const updatedHTML = doc.body.innerHTML;
+      copyToClipboard(updatedHTML);
+      showToast('Copied with links!');
+      linkModal.style.display = 'none';
+      overlay.style.display = 'none';
     };
 
     cancelLinksBtn.onclick = () => {
@@ -468,40 +328,93 @@
       overlay.style.display = 'none';
     };
 
-    function showToast(msg) {
-      toast.textContent = msg;
-      toast.className = 'show';
-      setTimeout(() => {
-        toast.className = toast.className.replace('show', '');
-      }, 3000);
-    }
+    document.getElementById('toggleAddOffer').onclick = () => {
+      const form = document.getElementById('addOfferForm');
+      form.style.display = form.style.display === 'block' ? 'none' : 'block';
+    };
 
-    // On page load: Fetch offers JSON from GitHub Pages then fallback to localStorage
-    async function loadOffers() {
-      const githubJsonUrl = 'https://raw.githubusercontent.com/khaled3333333333333333/creatives/refs/heads/main/offers.json'; // <-- Replace this URL with your actual GitHub Pages JSON URL
-      try {
-        const response = await fetch(githubJsonUrl);
-        if (!response.ok) throw new Error('Network response not ok');
-        const data = await response.json();
-        offers = data;
-        saveOffers();
-        renderOffers('');
-        showToast('Offers loaded from GitHub Pages JSON');
-      } catch (err) {
-        // Fallback: load from localStorage if exists
-        const saved = localStorage.getItem('offers');
-        if (saved) {
-          offers = JSON.parse(saved);
-          renderOffers('');
-          showToast('Offers loaded from localStorage');
-        } else {
-          offers = [];
-          renderOffers('');
-        }
+    document.getElementById('addOfferBtn').onclick = () => {
+      const offer = {
+        name: document.getElementById('offerNameInput').value.trim(),
+        sponsor: document.getElementById('sponsorInput').value.trim(),
+        from: document.getElementById('fromInput').value.trim(),
+        subject: document.getElementById('subjectInput').value.trim(),
+        geo: document.getElementById('geoInput').value.trim(),
+        creative: document.getElementById('creativeInput').value.trim()
+      };
+      if (!offer.name) {
+        alert('Offer name required');
+        return;
       }
+      offers.push(offer);
+      saveOffers();
+      renderOffers();
+      // clear inputs
+      ['offerNameInput','sponsorInput','fromInput','subjectInput','geoInput','creativeInput'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+    };
+
+    document.getElementById('searchBar').addEventListener('input', e => {
+      renderOffers(e.target.value);
+    });
+
+    document.getElementById('importFile').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const imported = JSON.parse(ev.target.result);
+          if (!Array.isArray(imported)) throw new Error('Invalid JSON');
+          offers = imported;
+          saveOffers();
+          renderOffers();
+          showToast('Imported successfully!');
+        } catch {
+          alert('Invalid JSON file.');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    function exportOffers() {
+      const dataStr = JSON.stringify(offers, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'offers.json';
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
-    loadOffers();
+    renderOffers();
+    window.addEventListener('DOMContentLoaded', async () => {
+  const githubJsonUrl = 'https://raw.githubusercontent.com/khaled3333333333333333/creatives/refs/heads/main/offers.json'; // <-- replace this with your real URL
+
+  try {
+    const response = await fetch(githubJsonUrl);
+    if (!response.ok) throw new Error('Network response was not ok');
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      offers = data;
+      saveOffers();
+      renderOffers('');
+      showToast('Offers loaded from GitHub Pages');
+    }
+  } catch (err) {
+    const saved = localStorage.getItem('offers');
+    if (saved) {
+      offers = JSON.parse(saved);
+      renderOffers('');
+      showToast('Offers loaded from localStorage');
+    } else {
+      offers = [];
+      renderOffers('');
+    }
+  }
+});
 
   </script>
 </body>
